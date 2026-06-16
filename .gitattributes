@@ -1,0 +1,12 @@
+* text=auto
+
+*.blade.php diff=html
+*global.css linguist-vendored
+*auth.css linguist-vendored
+*.html diff=html
+*.md diff=markdown
+*.php diff=php
+
+/.github export-ignore
+CHANGELOG.md export-ignore
+.styleci.yml export-ignore
