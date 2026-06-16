@@ -3,11 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Notifications\ResetPasswordNotification;
 use App\Rules\ValidEmailDomain;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\{Auth, Hash};
-use Illuminate\Validation\Rules\Password;
+use Illuminate\Support\Facades\{Auth, Hash, DB, Password};
+use Illuminate\Validation\Rules\Password as PasswordRule;
 
 class AuthController extends Controller
 {
@@ -129,57 +130,124 @@ class AuthController extends Controller
     public function forgotPasswordPost(Request $request)
     {
         $request->validate([
-            'email' => 'required|email:dns',
-            'phone' => 'required|numeric',
+            'email' => 'required|email:dns|exists:users,email',
+        ], [
+            'email.required' => 'Email wajib diisi',
+            'email.email' => 'Format email tidak valid',
+            'email.exists' => 'Email tidak terdaftar di sistem kami'
         ]);
 
-        $user = User::where('email', $request->email)
-            ->where('phone', $request->phone)
-            ->first();
+        $user = User::where('email', $request->email)->first();
 
         if (!$user) {
-            $message = "Email dan nomor HP tidak cocok dengan data kami!";
-
+            $message = "Email tidak ditemukan di sistem kami!";
             myFlasherBuilder(message: $message, failed: true);
             return back()->withInput();
         }
 
-        // tandai user terverifikasi untuk reset password di session
-        $request->session()->put('reset_password_user_id', $user->id);
+        try {
+            // Generate token untuk reset password
+            $token = Str::random(64);
 
-        return redirect('/auth/reset_password');
+            // Simpan token ke database
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $user->email],
+                [
+                    'token' => Hash::make($token),
+                    'created_at' => now()
+                ]
+            );
+
+            // Kirim email dengan link verifikasi
+            $user->notify(new ResetPasswordNotification($token));
+
+            $message = "Link verifikasi reset password telah dikirim ke email Anda. Silakan cek inbox atau folder spam. Link berlaku selama 1 jam.";
+            myFlasherBuilder(message: $message, success: true);
+            return redirect('/auth/login');
+        } catch (\Exception $e) {
+            $message = "Terjadi kesalahan saat mengirim email. Silakan coba lagi.";
+            myFlasherBuilder(message: $message, failed: true);
+            return back()->withInput();
+        }
     }
 
     public function resetPasswordGet(Request $request)
     {
-        if (!$request->session()->has('reset_password_user_id')) {
-            $message = "Silakan verifikasi akun Anda terlebih dahulu!";
+        $token = $request->query('token');
+        $email = $request->query('email');
 
+        // Validasi token dan email
+        if (!$token || !$email) {
+            $message = "Link reset password tidak valid atau sudah kadaluarsa!";
+            myFlasherBuilder(message: $message, failed: true);
+            return redirect('/auth/login');
+        }
+
+        // Cek token di database
+        $resetRecord = DB::table('password_reset_tokens')
+            ->where('email', $email)
+            ->first();
+
+        if (!$resetRecord) {
+            $message = "Link reset password tidak valid atau sudah kadaluarsa!";
+            myFlasherBuilder(message: $message, failed: true);
+            return redirect('/auth/login');
+        }
+
+        // Cek apakah token cocok dan belum kadaluarsa
+        if (!Hash::check($token, $resetRecord->token)) {
+            $message = "Link reset password tidak valid!";
+            myFlasherBuilder(message: $message, failed: true);
+            return redirect('/auth/login');
+        }
+
+        // Cek apakah token masih dalam 1 jam
+        $createdAt = \Carbon\Carbon::parse($resetRecord->created_at);
+        if ($createdAt->addHour()->isPast()) {
+            // Hapus token yang sudah expired
+            DB::table('password_reset_tokens')->where('email', $email)->delete();
+
+            $message = "Link reset password sudah kadaluarsa. Silakan minta link baru.";
             myFlasherBuilder(message: $message, failed: true);
             return redirect('/auth/forgot_password');
         }
 
         $title = "Reset Password";
+        $data = compact('token', 'email', 'title');
 
-        return view('/auth/reset_password', compact("title"));
+        return view('/auth/reset_password', $data);
     }
 
     public function resetPasswordPost(Request $request)
     {
-        if (!$request->session()->has('reset_password_user_id')) {
-            $message = "Silakan verifikasi akun Anda terlebih dahulu!";
+        $token = $request->input('token');
+        $email = $request->input('email');
 
+        // Validasi token dan email
+        if (!$token || !$email) {
+            $message = "Silakan akses link reset password dari email Anda!";
             myFlasherBuilder(message: $message, failed: true);
             return redirect('/auth/forgot_password');
         }
 
-        // Validasi dengan password rules yang kuat
+        // Cek token di database
+        $resetRecord = DB::table('password_reset_tokens')
+            ->where('email', $email)
+            ->first();
+
+        if (!$resetRecord) {
+            $message = "Link reset password tidak valid atau sudah kadaluarsa!";
+            myFlasherBuilder(message: $message, failed: true);
+            return redirect('/auth/login');
+        }
+
+        // Validasi password dengan rules yang kuat
         $validated = $request->validate(
             [
                 'password' => [
                     'required',
                     'confirmed',
-                    Password::min(8)
+                    PasswordRule::min(8)
                         ->mixedCase()
                         ->numbers()
                         ->symbols()
@@ -196,15 +264,21 @@ class AuthController extends Controller
             ]
         );
 
-        User::where('id', $request->session()->get('reset_password_user_id'))
-            ->update(['password' => Hash::make($validated['password'])]);
+        try {
+            // Update password user
+            User::where('email', $email)->update(['password' => Hash::make($validated['password'])]);
 
-        $request->session()->forget('reset_password_user_id');
+            // Hapus token dari database
+            DB::table('password_reset_tokens')->where('email', $email)->delete();
 
-        $message = "Password berhasil diubah, silakan login!";
-
-        myFlasherBuilder(message: $message, success: true);
-        return redirect('/auth/login');
+            $message = "Password berhasil diubah! Silakan login dengan password baru Anda.";
+            myFlasherBuilder(message: $message, success: true);
+            return redirect('/auth/login');
+        } catch (\Exception $e) {
+            $message = "Terjadi kesalahan saat mereset password. Silakan coba lagi.";
+            myFlasherBuilder(message: $message, failed: true);
+            return back()->withInput();
+        }
     }
 
 

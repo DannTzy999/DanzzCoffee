@@ -27,15 +27,15 @@
             <div class="steps-container">
                 <div class="step-item">
                     <span class="step-number">1</span>
-                    <p class="step-text">Masukkan email & nomor telepon yang terdaftar</p>
+                    <p class="step-text">Masukkan email yang terdaftar</p>
                 </div>
                 <div class="step-item">
                     <span class="step-number">2</span>
-                    <p class="step-text">Kami akan verifikasi identitasmu</p>
+                    <p class="step-text">Kami kirim link verifikasi ke email kamu</p>
                 </div>
                 <div class="step-item">
                     <span class="step-number">3</span>
-                    <p class="step-text">Buat password baru dan masuk kembali</p>
+                    <p class="step-text">Buka link dan buat password baru</p>
                 </div>
             </div>
         </div>
@@ -67,7 +67,7 @@
                     <i class="fas fa-envelope"></i>
                 </div>
                 <h2>Reset password</h2>
-                <p>Masukkan email dan nomor telepon yang terdaftar di akun kamu</p>
+                <p>Masukkan email yang terdaftar di akun kamu. Kami akan kirim link verifikasi ke email kamu.</p>
             </div>
 
             <!-- Messages -->
@@ -104,25 +104,8 @@
                     @enderror
                 </div>
 
-                <!-- Phone Field -->
-                <div class="form-group">
-                    <label for="phone">NO. TELEPON</label>
-                    <input 
-                        type="text"
-                        class="form-control @error('phone') is-invalid @enderror" 
-                        id="phone"
-                        name="phone" 
-                        placeholder="08xx xxxx xxxx" 
-                        value="{{ @old('phone') }}"
-                        autocomplete="off"
-                        required>
-                    @error('phone')
-                    <div class="invalid-feedback d-block">{{ $message }}</div>
-                    @enderror
-                </div>
-
                 <!-- Submit Button -->
-                <button type="submit" class="btn-submit">Verifikasi Akun</button>
+                <button type="submit" class="btn-submit">Kirim Link Verifikasi</button>
             </form>
 
             <!-- Back to Login Link -->

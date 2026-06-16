@@ -87,6 +87,10 @@
             <form method="post" action="/auth/reset_password" autocomplete="off" class="register-form">
                 @csrf
 
+                <!-- Hidden Token and Email -->
+                <input type="hidden" name="token" value="{{ $token ?? '' }}">
+                <input type="hidden" name="email" value="{{ $email ?? '' }}">
+
                 <!-- New Password Field -->
                 <div class="form-group">
                     <label for="password">PASSWORD BARU</label>

@@ -36,7 +36,7 @@ Route::middleware(['alreadyLogin'])->group(function () {
     // Forgot / Reset Password
     Route::get('/auth/forgot_password', [AuthController::class, "forgotPasswordGet"]);
     Route::post('/auth/forgot_password', [AuthController::class, "forgotPasswordPost"]);
-    Route::get('/auth/reset_password', [AuthController::class, "resetPasswordGet"]);
+    Route::get('/auth/reset_password', [AuthController::class, "resetPasswordGet"])->name('password.reset');
     Route::post('/auth/reset_password', [AuthController::class, "resetPasswordPost"]);
 });
 
